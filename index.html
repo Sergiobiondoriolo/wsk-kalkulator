@@ -1068,31 +1068,59 @@ function KalkulatorTab({ products, marketplaces, shippingOptions, packagingOptio
   const [showManual, setShowManual] = useState(false);
   const [manualForm, setManualForm] = useState({ name: "", ek: "", mwst: "19" });
 
-  // base.com Export
-  const exportBasecom = (marketplace, result, items) => {
+  // base.com Export Modal
+  const [basecomModal, setBasecomModal] = useState(null);
+
+  const openBasecomExport = (marketplace, result, items) => {
     if (!result || items.length === 0) return;
-    const headers = ["EAN","Produktname (DE)","SKU","Preis (Standard (EUR))","Menge (Standard)","Kategoriename","Herstellername","Steuersatz"];
-    const rows = result.items.map((ri, idx) => {
+    const exportItems = result.items.map((ri, idx) => {
       const item = items[idx] || {};
       const suppName = item.supplierId ? (suppliers.find(s => s.id === item.supplierId)?.name || "") : "";
       const prod = products.find(p => p.id === item.id);
-      return [
-        item.ean || "",
-        ri.name,
-        item.sku || "",
-        String(ri.vkBrutto).replace(".", ","),
-        String(prod?.bestand || 0),
-        item.category || "",
-        suppName,
-        ri.mwstRate + "%",
-      ];
+      return {
+        name: ri.name,
+        ean: item.ean || "",
+        sku: item.sku || "",
+        price: String(Math.round(ri.vkBrutto * 100) / 100).replace(".", ","),
+        bestand: String(prod?.bestand || 0),
+        category: item.category || "",
+        manufacturer: suppName,
+        tax: ri.mwstRate + "%",
+        description: "",
+      };
     });
+    setBasecomModal({ marketplace, items: exportItems });
+  };
+
+  const updateBasecomItem = (idx, field, value) => {
+    setBasecomModal(prev => {
+      const items = [...prev.items];
+      items[idx] = { ...items[idx], [field]: value };
+      return { ...prev, items };
+    });
+  };
+
+  const downloadBasecomCSV = () => {
+    if (!basecomModal) return;
+    const headers = ["EAN","Produktname (DE)","SKU","Preis (Standard (EUR))","Menge (Standard)","Kategoriename","Herstellername","Steuersatz","Beschreibung (DE)"];
+    const rows = basecomModal.items.map(item => [
+      item.ean,
+      item.name,
+      item.sku,
+      item.price,
+      item.bestand,
+      item.category,
+      item.manufacturer,
+      item.tax,
+      '"' + (item.description || "").replace(/"/g, '""') + '"',
+    ]);
     const csv = [headers.join(";"), ...rows.map(r => r.join(";"))].join("\n");
     const blob = new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
-    a.download = "basecom_" + marketplace.name.toLowerCase().replace(/\s/g,"_") + "_" + new Date().toISOString().slice(0,10) + ".csv";
+    a.download = "basecom_" + basecomModal.marketplace.name.toLowerCase().replace(/\s/g,"_") + "_" + new Date().toISOString().slice(0,10) + ".csv";
     a.click();
+    setBasecomModal(null);
   };
 
   const activeMarketplaces = marketplaces.filter((m) => m.active);
@@ -1413,7 +1441,7 @@ function KalkulatorTab({ products, marketplaces, shippingOptions, packagingOptio
                       <div style={{ fontSize: 11, color: theme.textMuted, marginTop: 2 }}>{fmtP(r.realMargin)} reale Marge</div>
                     </div>
                   </div>
-                  <div style={{ marginTop: 10, textAlign: "right" }}><button style={{ ...css.btn("ghost"), padding: "6px 12px", fontSize: 11, border: "1px solid " + theme.border }} onClick={(e) => { e.stopPropagation(); exportBasecom(c, r, allItems); }}>📥 CSV für base.com</button></div>
+                  <div style={{ marginTop: 10, textAlign: "right" }}><button style={{ ...css.btn("ghost"), padding: "6px 12px", fontSize: 11, border: "1px solid " + theme.border }} onClick={(e) => { e.stopPropagation(); openBasecomExport(c, r, allItems); }}>📥 CSV für base.com</button></div>
                 </div>
               </div>
             );
@@ -1432,6 +1460,71 @@ function KalkulatorTab({ products, marketplaces, shippingOptions, packagingOptio
         </div>
       )}
 
+
+      {/* ─── base.com Export Modal ──────────────────── */}
+      {basecomModal && (
+        <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.7)", zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }} onClick={() => setBasecomModal(null)}>
+          <div style={{ background: theme.card, borderRadius: 16, border: "1px solid " + theme.border, maxWidth: 700, width: "100%", maxHeight: "90vh", overflow: "auto", padding: 24 }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+              <div style={{ fontSize: 18, fontWeight: 700 }}>📥 Export für base.com — {basecomModal.marketplace.name}</div>
+              <button style={{ ...css.btn("ghost"), padding: "4px 8px" }} onClick={() => setBasecomModal(null)}>✕</button>
+            </div>
+            <div style={{ fontSize: 12, color: theme.textMuted, marginBottom: 16 }}>Passe die Daten an bevor die CSV erstellt wird. Alle Felder sind editierbar.</div>
+
+            {basecomModal.items.map((item, idx) => (
+              <div key={idx} style={{ background: theme.surface, borderRadius: 10, padding: 16, marginBottom: 12, border: "1px solid " + theme.border }}>
+                <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 12, color: theme.accent }}>{item.name}</div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                  <div>
+                    <div style={{ fontSize: 10, color: theme.textMuted, marginBottom: 3, textTransform: "uppercase" }}>Produktname</div>
+                    <input style={css.input} value={item.name} onChange={e => updateBasecomItem(idx, "name", e.target.value)} />
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 10, color: theme.textMuted, marginBottom: 3, textTransform: "uppercase" }}>EAN</div>
+                    <input style={css.input} value={item.ean} onChange={e => updateBasecomItem(idx, "ean", e.target.value)} />
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 10, color: theme.textMuted, marginBottom: 3, textTransform: "uppercase" }}>SKU</div>
+                    <input style={css.input} value={item.sku} onChange={e => updateBasecomItem(idx, "sku", e.target.value)} />
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 10, color: theme.textMuted, marginBottom: 3, textTransform: "uppercase" }}>Preis (Brutto)</div>
+                    <input style={{ ...css.input, fontFamily: theme.fontMono }} value={item.price} onChange={e => updateBasecomItem(idx, "price", e.target.value)} />
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 10, color: theme.textMuted, marginBottom: 3, textTransform: "uppercase" }}>Bestand / Menge</div>
+                    <input style={{ ...css.input, fontFamily: theme.fontMono }} type="number" min="0" value={item.bestand} onChange={e => updateBasecomItem(idx, "bestand", e.target.value)} />
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 10, color: theme.textMuted, marginBottom: 3, textTransform: "uppercase" }}>Kategorie</div>
+                    <input style={css.input} value={item.category} onChange={e => updateBasecomItem(idx, "category", e.target.value)} />
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 10, color: theme.textMuted, marginBottom: 3, textTransform: "uppercase" }}>Hersteller</div>
+                    <input style={css.input} value={item.manufacturer} onChange={e => updateBasecomItem(idx, "manufacturer", e.target.value)} />
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 10, color: theme.textMuted, marginBottom: 3, textTransform: "uppercase" }}>MwSt</div>
+                    <input style={css.input} value={item.tax} onChange={e => updateBasecomItem(idx, "tax", e.target.value)} />
+                  </div>
+                </div>
+                <div style={{ marginTop: 10 }}>
+                  <div style={{ fontSize: 10, color: theme.textMuted, marginBottom: 3, textTransform: "uppercase" }}>Beschreibung (HTML)</div>
+                  <textarea style={{ ...css.input, minHeight: 80, resize: "vertical", fontFamily: "inherit", fontSize: 12 }} value={item.description} onChange={e => updateBasecomItem(idx, "description", e.target.value)} placeholder="<h2>Produktname</h2>\n<p>Neu und originalverpackt.</p>\n<p>Schneller Versand aus Deutschland.</p>" />
+                </div>
+              </div>
+            ))}
+
+            <div style={{ display: "flex", gap: 10, marginTop: 16 }}>
+              <button style={{ ...css.btn("primary"), flex: 1, padding: "12px 20px", fontSize: 14, background: theme.green }} onClick={downloadBasecomCSV}>📥 CSV herunterladen</button>
+              <button style={{ ...css.btn("ghost"), padding: "12px 20px" }} onClick={() => setBasecomModal(null)}>Abbrechen</button>
+            </div>
+            <div style={{ marginTop: 10, fontSize: 11, color: theme.textMuted, lineHeight: 1.5 }}>
+              <strong>Import in base.com:</strong> Produkte → Import/Export → Importieren → Beliebiges CSV-Format → Semikolon → UTF-8 → <strong>Überspringe erste Reihe: Ja</strong>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );
