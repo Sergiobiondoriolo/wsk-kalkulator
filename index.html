@@ -2412,6 +2412,7 @@ function PreislistenTab({ suppliers, setSuppliers, products, setProducts, addLog
   };
 
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
+  const [supplierSearch, setSupplierSearch] = useState("");
 
   const startEdit = (s) => {
     setForm({ name: s.name, color: s.color, notes: s.notes || "", defaultPriceType: s.defaultPriceType || "netto", defaultMwst: s.defaultMwst || "19" });
@@ -2492,17 +2493,24 @@ function PreislistenTab({ suppliers, setSuppliers, products, setProducts, addLog
 
   return (
     <div>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-        <div>
-          <div style={{ fontSize: 15, fontWeight: 600 }}>Lieferanten & Preislisten</div>
-          <div style={{ fontSize: 13, color: theme.textMuted, marginTop: 2 }}>
-            Organisiere deine Produkte nach Lieferanten. Beim Import kannst du Produkte direkt einer Preisliste zuordnen.
-          </div>
-        </div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+        <div style={{ fontSize: 15, fontWeight: 600 }}>Lieferanten & Preislisten</div>
         <button style={css.btn("primary")} onClick={() => { setForm({ name: "", color: COLORS[suppliers.length % COLORS.length], notes: "", defaultPriceType: "netto", defaultMwst: "19" }); setEditId(null); setShowForm(true); }}>
           <Icon type="plus" size={15} /> Neue Preisliste
         </button>
       </div>
+
+      {suppliers.length > 1 && !openId && (
+        <div style={{ marginBottom: 12 }}>
+          <input
+            type="text"
+            placeholder={"Preisliste suchen... (" + suppliers.length + " Lieferanten)"}
+            value={supplierSearch}
+            onChange={(e) => setSupplierSearch(e.target.value)}
+            style={{ ...css.input, width: "100%", padding: "10px 14px", fontSize: 13 }}
+          />
+        </div>
+      )}
 
       {showForm && (
         <div style={css.card}>
@@ -2760,7 +2768,7 @@ function PreislistenTab({ suppliers, setSuppliers, products, setProducts, addLog
         ) : (
           /* ─── COMPACT CARD GRID ──────────────────── */
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 8 }}>
-          {suppliers.map((s) => {
+          {suppliers.filter((s) => !supplierSearch || s.name.toLowerCase().includes(supplierSearch.toLowerCase())).map((s) => {
             const count = getProductCount(s.id);
             const range = getPriceRange(s.id);
             return (
