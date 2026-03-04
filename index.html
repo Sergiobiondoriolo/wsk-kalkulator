@@ -1071,7 +1071,7 @@ function KalkulatorTab({ products, marketplaces, shippingOptions, packagingOptio
   // base.com Export
   const exportBasecom = (marketplace, result, items) => {
     if (!result || items.length === 0) return;
-    const headers = ["Name","EAN","SKU","Preis (Brutto)","Bestand","Kategorie","Marke","MwSt","EK Netto","Gewinn Netto"];
+    const headers = ["name","EAN","SKU","price","quantity","category","manufacturer","tax"];
     const rows = result.items.map((ri, idx) => {
       const item = items[idx] || {};
       const suppName = item.supplierId ? (suppliers.find(s => s.id === item.supplierId)?.name || "") : "";
@@ -1085,8 +1085,6 @@ function KalkulatorTab({ products, marketplaces, shippingOptions, packagingOptio
         item.category || "",
         suppName,
         ri.mwstRate + "%",
-        String(item.ek).replace(".", ","),
-        String(ri.gewinn).replace(".", ","),
       ];
     });
     const csv = [headers.join(";"), ...rows.map(r => r.join(";"))].join("\n");
