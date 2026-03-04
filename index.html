@@ -498,7 +498,7 @@ const Field = ({ label, children, style: s }) => (
 );
 
 // ─── GIST AUTO-SYNC SYSTEM ──────────────────────────────────
-const GIST_DATA_KEYS = ["pk_products","pk_marketplaces","pk_shipping","pk_packaging","pk_suppliers","pk_trash","pk_logs","pk_admin_password","pk_snapshots","pk_ebay_listings"];
+const GIST_DATA_KEYS = ["pk_products","pk_marketplaces","pk_shipping","pk_packaging","pk_suppliers","pk_trash","pk_logs","pk_admin_password","pk_snapshots"];
 
 // Global auto-save debounce
 let _gistSaveTimer = null;
@@ -749,7 +749,6 @@ function PreisKalkulatorApp({ appPassword, setAppPassword }) {
   const [suppliers, setSuppliers, suppLoaded] = useStorage("pk_suppliers", []);
   const [trash, setTrash, trashLoaded] = useStorage("pk_trash", []);
   const [logs, setLogs, logsLoaded, setLogsState] = useStorage("pk_logs", []);
-  const [ebayListings, setEbayListings, ebayLoaded] = useStorage("pk_ebay_listings", []);
 
   // GitHub Gist Sync
   const [ghToken, setGhToken] = useState(() => { try { return localStorage.getItem("pk_gh_token") || ""; } catch(e) { return ""; } });
@@ -768,7 +767,7 @@ function PreisKalkulatorApp({ appPassword, setAppPassword }) {
     try { localStorage.setItem("pk_gh_token", token); localStorage.setItem("pk_gh_gist", gist); } catch(e) {}
   };
 
-  const DATA_KEYS = ["pk_products","pk_marketplaces","pk_shipping","pk_packaging","pk_suppliers","pk_trash","pk_logs","pk_admin_password","pk_snapshots","pk_ebay_listings"];
+  const DATA_KEYS = ["pk_products","pk_marketplaces","pk_shipping","pk_packaging","pk_suppliers","pk_trash","pk_logs","pk_admin_password","pk_snapshots"];
 
   const gatherData = () => {
     const d = { _sync: true, _date: new Date().toISOString(), _version: APP_VERSION };
@@ -1038,7 +1037,7 @@ function PreisKalkulatorApp({ appPassword, setAppPassword }) {
       </div>
       <div style={css.content}>
         {activeTab === "kalkulator" && (
-          <KalkulatorTab products={products} marketplaces={marketplaces} shippingOptions={shippingOptions} packagingOptions={packagingOptions} suppliers={suppliers} ebayListings={ebayListings} setEbayListings={setEbayListings} />
+          <KalkulatorTab products={products} marketplaces={marketplaces} shippingOptions={shippingOptions} packagingOptions={packagingOptions} suppliers={suppliers} />
         )}
         {activeTab === "produkte" && <ProdukteTab products={products} setProducts={setProducts} suppliers={suppliers} setSuppliers={setSuppliers} trash={trash} setTrash={setTrash} addLog={addLog} />}
         {activeTab === "preislisten" && <PreislistenTab suppliers={suppliers} setSuppliers={setSuppliers} products={products} setProducts={setProducts} addLog={addLog} />}
@@ -1055,7 +1054,7 @@ function PreisKalkulatorApp({ appPassword, setAppPassword }) {
 // ═══════════════════════════════════════════════════════════
 // TAB: KALKULATOR
 // ═══════════════════════════════════════════════════════════
-function KalkulatorTab({ products, marketplaces, shippingOptions, packagingOptions, suppliers, ebayListings, setEbayListings }) {
+function KalkulatorTab({ products, marketplaces, shippingOptions, packagingOptions, suppliers }) {
   const [search, setSearch] = useState("");
   const [cart, setCart] = useState([]);
   const [manualItems, setManualItems] = useState([]);
@@ -1069,102 +1068,31 @@ function KalkulatorTab({ products, marketplaces, shippingOptions, packagingOptio
   const [showManual, setShowManual] = useState(false);
   const [manualForm, setManualForm] = useState({ name: "", ek: "", mwst: "19" });
 
-  // eBay Listing
-  const [showEbayForm, setShowEbayForm] = useState(false);
-  const [ebayDefaults, setEbayDefaults] = useState(() => {
-    try { const v = localStorage.getItem("pk_ebay_defaults"); return v ? JSON.parse(v) : null; } catch(e) { return null; }
-  });
-  const defaultEbay = ebayDefaults || {
-    format: "FixedPrice", duration: "GTC", condition: "1000",
-    country: "DE", city: "Solingen", plz: "", mwst: "19",
-    privateAuction: false, sofortZahlung: true,
-    returnPolicy: "14 Tage", autoRelist: false,
-    shippingProfile: "", returnProfile: "",
-  };
-  const saveEbayDefaults = (d) => { setEbayDefaults(d); localStorage.setItem("pk_ebay_defaults", JSON.stringify(d)); };
-  const [showEbayDefaults, setShowEbayDefaults] = useState(false);
-  const [ebayForm, setEbayForm] = useState({ title: "", description: "", category: "", quantity: "1", price: "", ean: "", brand: "", mpn: "", images: "",
-    format: defaultEbay.format, duration: defaultEbay.duration, condition: defaultEbay.condition,
-    country: defaultEbay.country, city: defaultEbay.city, plz: defaultEbay.plz, mwst: defaultEbay.mwst,
-    privateAuction: defaultEbay.privateAuction, sofortZahlung: defaultEbay.sofortZahlung,
-    returnPolicy: defaultEbay.returnPolicy, autoRelist: defaultEbay.autoRelist,
-    shippingProfile: defaultEbay.shippingProfile, returnProfile: defaultEbay.returnProfile,
-  });
-  const [editingListingId, setEditingListingId] = useState(null);
-  const [showEbayListings, setShowEbayListings] = useState(false);
-
-  const openEbayForm = (calcData, items) => {
-    const names = items.map(i => i.name).join(" + ");
-    const eans = items.map(i => i.ean || "").filter(Boolean);
-    const totalQty = items.reduce((s, i) => s + i.qty, 0);
-    const suppName = items[0]?.supplierId ? (suppliers.find(s => s.id === items[0].supplierId)?.name || "") : "";
-    const d = ebayDefaults || defaultEbay;
-    setEbayForm({
-      title: names.slice(0, 80),
-      description: "<h2>" + names + "</h2>\n<p>Neu und originalverpackt.</p>\n<p>Schneller Versand aus Deutschland.</p>",
-      category: "", quantity: String(totalQty),
-      price: String(Math.round(calcData.totalVkBrutto * 100) / 100),
-      ean: eans[0] || "", brand: suppName, mpn: "", images: "",
-      format: d.format, duration: d.duration, condition: d.condition,
-      country: d.country, city: d.city, plz: d.plz, mwst: d.mwst,
-      privateAuction: d.privateAuction, sofortZahlung: d.sofortZahlung,
-      returnPolicy: d.returnPolicy, autoRelist: d.autoRelist,
-      shippingProfile: d.shippingProfile, returnProfile: d.returnProfile,
+  // base.com Export
+  const exportBasecom = (marketplace, result, items) => {
+    if (!result || items.length === 0) return;
+    const headers = ["Name","EAN","SKU","Preis (Brutto)","Menge","Kategorie","Marke","MwSt","EK Netto","Gewinn Netto"];
+    const rows = result.items.map((ri, idx) => {
+      const item = items[idx] || {};
+      const suppName = item.supplierId ? (suppliers.find(s => s.id === item.supplierId)?.name || "") : "";
+      return [
+        ri.name,
+        item.ean || "",
+        item.sku || "",
+        String(ri.vkBrutto).replace(".", ","),
+        String(ri.qty || item.qty || 1),
+        item.category || "",
+        suppName,
+        ri.mwstRate + "%",
+        String(item.ek).replace(".", ","),
+        String(ri.gewinn).replace(".", ","),
+      ];
     });
-    setEditingListingId(null);
-    setShowEbayForm(true);
-  };
-
-  const saveEbayListing = () => {
-    if (!ebayForm.title || !ebayForm.price) return;
-    if (editingListingId) {
-      setEbayListings(ebayListings.map(l => l.id === editingListingId ? { ...l, ...ebayForm, updatedAt: new Date().toISOString() } : l));
-    } else {
-      setEbayListings([...ebayListings, { id: Date.now().toString(), ...ebayForm, createdAt: new Date().toISOString() }]);
-    }
-    setShowEbayForm(false);
-    setEditingListingId(null);
-  };
-
-  const editEbayListing = (listing) => {
-    setEbayForm({ title: listing.title, description: listing.description, category: listing.category, condition: listing.condition, quantity: listing.quantity, price: listing.price, ean: listing.ean || "", brand: listing.brand || "", mpn: listing.mpn || "", shippingProfile: listing.shippingProfile || "", returnProfile: listing.returnProfile || "", images: listing.images || "" });
-    setEditingListingId(listing.id);
-    setShowEbayForm(true);
-  };
-
-  const deleteEbayListing = (id) => setEbayListings(ebayListings.filter(l => l.id !== id));
-
-  const exportEbayCSV = () => {
-    if (ebayListings.length === 0) return;
-    const headers = ["Name","SKU","EAN","Preis","Menge","Beschreibung","Marke","MPN","Zustand","Kategorie","Format","Dauer","MwSt","Land","PLZ","Stadt","Versandprofil","Ruecknahmeprofil","Rueckgabe","Sofortzahlung","Bilder"];
-    const rows = ebayListings.map(l => [
-      l.title,
-      "",
-      l.ean || "",
-      l.price,
-      l.quantity,
-      '"' + (l.description || "").replace(/"/g, '""') + '"',
-      l.brand || "",
-      l.mpn || "",
-      l.condition === "1000" ? "Neu" : l.condition === "1500" ? "Neu (sonstige)" : l.condition === "3000" ? "Gebraucht" : l.condition,
-      l.category || "",
-      l.format === "FixedPrice" ? "Festpreis" : "Versteigerung",
-      l.duration || "GTC",
-      (l.mwst || "19") + "%",
-      l.country || "DE",
-      l.plz || "",
-      l.city || "",
-      l.shippingProfile || "",
-      l.returnProfile || "",
-      l.returnPolicy || "14 days",
-      l.sofortZahlung ? "Ja" : "Nein",
-      l.images || ""
-    ]);
     const csv = [headers.join(";"), ...rows.map(r => r.join(";"))].join("\n");
     const blob = new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
-    a.download = "basecom_import_" + new Date().toISOString().slice(0,10) + ".csv";
+    a.download = "basecom_" + marketplace.name.toLowerCase().replace(/\s/g,"_") + "_" + new Date().toISOString().slice(0,10) + ".csv";
     a.click();
   };
 
@@ -1218,8 +1146,8 @@ function KalkulatorTab({ products, marketplaces, shippingOptions, packagingOptio
   const removeManualItem = (id) => setManualItems(manualItems.filter((m) => m.id !== id));
 
   const allItems = [
-    ...cart.map((c) => ({ id: c.productId, name: c.product.name, ek: c.product.ek, qty: c.qty, mwst: c.mwst, pzn: c.product.pzn, sku: c.product.sku, ean: c.product.ean || "", supplierId: c.product.supplierId, isManual: false })),
-    ...manualItems.map((m) => ({ id: m.id, name: m.name, ek: m.ek, qty: m.qty, mwst: m.mwst, pzn: "", sku: "", ean: "", supplierId: "", isManual: true })),
+    ...cart.map((c) => ({ id: c.productId, name: c.product.name, ek: c.product.ek, qty: c.qty, mwst: c.mwst, pzn: c.product.pzn, sku: c.product.sku, ean: c.product.ean || "", category: c.product.category || "", supplierId: c.product.supplierId, isManual: false })),
+    ...manualItems.map((m) => ({ id: m.id, name: m.name, ek: m.ek, qty: m.qty, mwst: m.mwst, pzn: "", sku: "", ean: "", category: "", supplierId: "", isManual: true })),
   ];
 
   const totalItems = allItems.reduce((s, i) => s + i.qty, 0);
@@ -1486,7 +1414,7 @@ function KalkulatorTab({ products, marketplaces, shippingOptions, packagingOptio
                       <div style={{ fontSize: 11, color: theme.textMuted, marginTop: 2 }}>{fmtP(r.realMargin)} reale Marge</div>
                     </div>
                   </div>
-                  {c.id === "ebay" && <div style={{ marginTop: 10, textAlign: "right" }}><button style={{ ...css.btn("primary"), padding: "8px 16px", fontSize: 12, background: "#E53238" }} onClick={(e) => { e.stopPropagation(); openEbayForm(r, allItems); }}>Bei eBay listen</button></div>}
+                  <div style={{ marginTop: 10, textAlign: "right" }}><button style={{ ...css.btn("ghost"), padding: "6px 12px", fontSize: 11, border: "1px solid " + theme.border }} onClick={(e) => { e.stopPropagation(); exportBasecom(c, r, allItems); }}>📥 CSV für base.com</button></div>
                 </div>
               </div>
             );
@@ -1505,222 +1433,7 @@ function KalkulatorTab({ products, marketplaces, shippingOptions, packagingOptio
         </div>
       )}
 
-      {/* ─── eBay Listings Übersicht ──────────────────── */}
-      {ebayListings.length > 0 && (
-        <div style={css.card}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-            <div style={css.cardTitle}><span style={{ color: "#E53238" }}>eBay</span> Listings ({ebayListings.length})</div>
-            <div style={{ display: "flex", gap: 6 }}>
-              <button style={{ ...css.btn("primary"), padding: "6px 14px", fontSize: 12, background: "#E53238" }} onClick={exportEbayCSV}>
-                <Icon type="upload" size={13} /> CSV für base.com
-              </button>
-              <button style={{ ...css.btn("ghost"), padding: "6px 10px", fontSize: 11 }} onClick={() => setShowEbayListings(!showEbayListings)}>
-                {showEbayListings ? "▲ Zuklappen" : "▼ Alle anzeigen"}
-              </button>
-            </div>
-          </div>
-          {showEbayListings && (
-            <table style={css.table}>
-              <thead><tr>
-                <th style={css.th}>Titel</th>
-                <th style={{ ...css.th, textAlign: "right" }}>Preis</th>
-                <th style={{ ...css.th, textAlign: "center" }}>Menge</th>
-                <th style={{ ...css.th, textAlign: "center" }}>EAN</th>
-                <th style={{ ...css.th, width: 80 }}></th>
-              </tr></thead>
-              <tbody>{ebayListings.map((l) => (
-                <tr key={l.id}>
-                  <td style={{ ...css.td, fontSize: 12, maxWidth: 300, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{l.title}</td>
-                  <td style={{ ...css.td, textAlign: "right", fontFamily: theme.fontMono, fontWeight: 600 }}>{fmt(parseFloat(l.price))}</td>
-                  <td style={{ ...css.td, textAlign: "center" }}>{l.quantity}</td>
-                  <td style={{ ...css.td, textAlign: "center", fontSize: 11, color: theme.textMuted }}>{l.ean || "–"}</td>
-                  <td style={{ ...css.td, textAlign: "right" }}>
-                    <button style={{ ...css.btn("ghost"), padding: "2px 4px" }} onClick={() => editEbayListing(l)}><Icon type="edit" size={11} /></button>
-                    <button style={{ ...css.btn("ghost"), padding: "2px 4px", color: theme.red }} onClick={() => deleteEbayListing(l.id)}><Icon type="trash" size={11} /></button>
-                  </td>
-                </tr>
-              ))}</tbody>
-            </table>
-          )}
-          {!showEbayListings && (
-            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-              {ebayListings.slice(0, 5).map((l) => (
-                <span key={l.id} style={{ ...css.badge(theme.textMuted), fontSize: 10, cursor: "pointer" }} onClick={() => editEbayListing(l)}>
-                  {l.title.slice(0, 30)}{l.title.length > 30 ? "..." : ""} · {fmt(parseFloat(l.price))}
-                </span>
-              ))}
-              {ebayListings.length > 5 && <span style={{ fontSize: 10, color: theme.textDim }}>+{ebayListings.length - 5} weitere</span>}
-            </div>
-          )}
-        </div>
-      )}
 
-      {/* ─── eBay Listing Form Modal ──────────────────── */}
-      {showEbayForm && (
-        <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.7)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}
-          onClick={(e) => e.target === e.currentTarget && setShowEbayForm(false)}>
-          <div style={{ background: theme.card, border: `1px solid ${theme.border}`, borderRadius: 16, width: "100%", maxWidth: 800, maxHeight: "90vh", overflow: "auto", padding: 24, boxShadow: "0 24px 80px rgba(0,0,0,0.5)" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-              <div style={{ fontSize: 18, fontWeight: 700, display: "flex", alignItems: "center", gap: 8 }}>
-                <span style={{ color: "#E53238", fontSize: 22 }}>●</span> {editingListingId ? "eBay Listing bearbeiten" : "Bei eBay listen"}
-              </div>
-              <button style={{ ...css.btn("ghost"), padding: "4px 8px" }} onClick={() => setShowEbayForm(false)}>✕</button>
-            </div>
-
-            {/* Artikeldaten */}
-            <div style={{ fontSize: 13, fontWeight: 700, color: theme.accent, marginBottom: 8, textTransform: "uppercase", letterSpacing: "0.05em" }}>Artikeldaten</div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 16 }}>
-              <div style={{ gridColumn: "1 / -1" }}>
-                <Field label={"Titel (" + ebayForm.title.length + "/80 Zeichen)"}>
-                  <input style={css.input} maxLength={80} value={ebayForm.title} onChange={(e) => setEbayForm({ ...ebayForm, title: e.target.value })} placeholder="eBay Artikeltitel (max. 80 Zeichen)" />
-                </Field>
-              </div>
-              <Field label="Preis (VK Brutto)">
-                <input style={{ ...css.input, fontSize: 20, fontWeight: 700, fontFamily: theme.fontMono, textAlign: "center" }} type="number" step="0.01" value={ebayForm.price} onChange={(e) => setEbayForm({ ...ebayForm, price: e.target.value })} />
-              </Field>
-              <Field label="Menge">
-                <input style={css.input} type="number" min="1" value={ebayForm.quantity} onChange={(e) => setEbayForm({ ...ebayForm, quantity: e.target.value })} />
-              </Field>
-              <Field label="EAN">
-                <input style={css.input} value={ebayForm.ean} onChange={(e) => setEbayForm({ ...ebayForm, ean: e.target.value })} placeholder="4001234567890" />
-              </Field>
-              <Field label="Marke / Hersteller">
-                <input style={css.input} value={ebayForm.brand} onChange={(e) => setEbayForm({ ...ebayForm, brand: e.target.value })} placeholder="z.B. Rausch, WMF" />
-              </Field>
-              <Field label="MPN (Herstellernummer)">
-                <input style={css.input} value={ebayForm.mpn} onChange={(e) => setEbayForm({ ...ebayForm, mpn: e.target.value })} placeholder="Optional" />
-              </Field>
-              <Field label="eBay Kategorie-ID">
-                <input style={css.input} value={ebayForm.category} onChange={(e) => setEbayForm({ ...ebayForm, category: e.target.value })} placeholder="z.B. 11848" />
-              </Field>
-            </div>
-
-            {/* Auktionseinstellungen */}
-            <div style={{ fontSize: 13, fontWeight: 700, color: "#E53238", marginBottom: 8, textTransform: "uppercase", letterSpacing: "0.05em" }}>Auktionseinstellungen</div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 16 }}>
-              <Field label="Verkaufsformat">
-                <select style={css.select} value={ebayForm.format} onChange={(e) => setEbayForm({ ...ebayForm, format: e.target.value })}>
-                  <option value="FixedPrice">Festpreis</option>
-                  <option value="Auction">Versteigerung</option>
-                </select>
-              </Field>
-              <Field label="Dauer">
-                <select style={css.select} value={ebayForm.duration} onChange={(e) => setEbayForm({ ...ebayForm, duration: e.target.value })}>
-                  <option value="GTC">Bis zum Abbruch / Ausverkauf</option>
-                  <option value="Days_3">3 Tage</option>
-                  <option value="Days_5">5 Tage</option>
-                  <option value="Days_7">7 Tage</option>
-                  <option value="Days_10">10 Tage</option>
-                  <option value="Days_14">14 Tage</option>
-                  <option value="Days_30">30 Tage</option>
-                </select>
-              </Field>
-              <Field label="Zustand">
-                <select style={css.select} value={ebayForm.condition} onChange={(e) => setEbayForm({ ...ebayForm, condition: e.target.value })}>
-                  <option value="1000">Neu</option>
-                  <option value="1500">Neu (sonstige)</option>
-                  <option value="2000">Generalüberholt</option>
-                  <option value="2500">Vom Verkäufer generalüberholt</option>
-                  <option value="3000">Gebraucht</option>
-                </select>
-              </Field>
-              <Field label="MwSt-Satz">
-                <select style={css.select} value={ebayForm.mwst} onChange={(e) => setEbayForm({ ...ebayForm, mwst: e.target.value })}>
-                  <option value="19">19%</option>
-                  <option value="7">7%</option>
-                  <option value="0">0% (steuerfrei)</option>
-                </select>
-              </Field>
-              <Field label="Sofortige Zahlung">
-                <select style={css.select} value={ebayForm.sofortZahlung ? "1" : "0"} onChange={(e) => setEbayForm({ ...ebayForm, sofortZahlung: e.target.value === "1" })}>
-                  <option value="1">Ja</option>
-                  <option value="0">Nein</option>
-                </select>
-              </Field>
-              <Field label="Private Auktion">
-                <select style={css.select} value={ebayForm.privateAuction ? "1" : "0"} onChange={(e) => setEbayForm({ ...ebayForm, privateAuction: e.target.value === "1" })}>
-                  <option value="0">Nein</option>
-                  <option value="1">Ja</option>
-                </select>
-              </Field>
-            </div>
-
-            {/* Versand & Rücknahme */}
-            <div style={{ fontSize: 13, fontWeight: 700, color: theme.green, marginBottom: 8, textTransform: "uppercase", letterSpacing: "0.05em" }}>Versand & Rücknahme</div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 16 }}>
-              <Field label="Versandprofil">
-                <input style={css.input} value={ebayForm.shippingProfile} onChange={(e) => setEbayForm({ ...ebayForm, shippingProfile: e.target.value })} placeholder="Name des eBay Versandprofils" />
-              </Field>
-              <Field label="Rückgabebedingungen">
-                <select style={css.select} value={ebayForm.returnPolicy} onChange={(e) => setEbayForm({ ...ebayForm, returnPolicy: e.target.value })}>
-                  <option value="14 days">14 Tage Rücknahme</option>
-                  <option value="30 days">30 Tage Rücknahme</option>
-                  <option value="60 days">60 Tage Rücknahme</option>
-                  <option value="No Return">Keine Rücknahme</option>
-                </select>
-              </Field>
-              <Field label="Rücknahmeprofil (optional)">
-                <input style={css.input} value={ebayForm.returnProfile} onChange={(e) => setEbayForm({ ...ebayForm, returnProfile: e.target.value })} placeholder="Name des eBay Rücknahmeprofils" />
-              </Field>
-              <Field label="Auto. Wiederaufnahme">
-                <select style={css.select} value={ebayForm.autoRelist ? "1" : "0"} onChange={(e) => setEbayForm({ ...ebayForm, autoRelist: e.target.value === "1" })}>
-                  <option value="0">Nein</option>
-                  <option value="1">Ja</option>
-                </select>
-              </Field>
-            </div>
-
-            {/* Standort */}
-            <div style={{ fontSize: 13, fontWeight: 700, color: theme.yellow, marginBottom: 8, textTransform: "uppercase", letterSpacing: "0.05em" }}>Standort</div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 16 }}>
-              <Field label="Land">
-                <select style={css.select} value={ebayForm.country} onChange={(e) => setEbayForm({ ...ebayForm, country: e.target.value })}>
-                  <option value="DE">Deutschland</option>
-                  <option value="AT">Österreich</option>
-                  <option value="CH">Schweiz</option>
-                </select>
-              </Field>
-              <Field label="Stadt">
-                <input style={css.input} value={ebayForm.city} onChange={(e) => setEbayForm({ ...ebayForm, city: e.target.value })} placeholder="z.B. Solingen" />
-              </Field>
-              <Field label="PLZ">
-                <input style={css.input} value={ebayForm.plz} onChange={(e) => setEbayForm({ ...ebayForm, plz: e.target.value })} placeholder="z.B. 42651" />
-              </Field>
-            </div>
-
-            {/* Bilder & Beschreibung */}
-            <div style={{ fontSize: 13, fontWeight: 700, color: theme.textMuted, marginBottom: 8, textTransform: "uppercase", letterSpacing: "0.05em" }}>Bilder & Beschreibung</div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 10, marginBottom: 16 }}>
-              <Field label="Bilder (URLs, kommagetrennt)">
-                <input style={css.input} value={ebayForm.images} onChange={(e) => setEbayForm({ ...ebayForm, images: e.target.value })} placeholder="https://bild1.jpg, https://bild2.jpg" />
-              </Field>
-              <Field label="Beschreibung (HTML)">
-                <textarea style={{ ...css.input, minHeight: 140, fontFamily: theme.font, lineHeight: 1.5 }} value={ebayForm.description} onChange={(e) => setEbayForm({ ...ebayForm, description: e.target.value })} placeholder="<p>Artikelbeschreibung hier...</p>" />
-              </Field>
-            </div>
-
-            <div style={{ display: "flex", gap: 8, justifyContent: "space-between", flexWrap: "wrap" }}>
-              <div style={{ display: "flex", gap: 8 }}>
-                <button style={{ ...css.btn("ghost"), fontSize: 11 }} onClick={() => setShowEbayForm(false)}>Abbrechen</button>
-                <button style={{ ...css.btn("ghost"), fontSize: 11, color: theme.accent }} onClick={() => {
-                  const d = { format: ebayForm.format, duration: ebayForm.duration, condition: ebayForm.condition, country: ebayForm.country, city: ebayForm.city, plz: ebayForm.plz, mwst: ebayForm.mwst, sofortZahlung: ebayForm.sofortZahlung, privateAuction: ebayForm.privateAuction, returnPolicy: ebayForm.returnPolicy, autoRelist: ebayForm.autoRelist, shippingProfile: ebayForm.shippingProfile, returnProfile: ebayForm.returnProfile };
-                  saveEbayDefaults(d);
-                  alert("Standardeinstellungen gespeichert! Werden beim nächsten Listing vorausgefüllt.");
-                }}>
-                  Einstellungen als Standard speichern
-                </button>
-              </div>
-              <button style={{ ...css.btn("primary"), background: "#E53238", padding: "10px 24px", fontSize: 14 }} onClick={saveEbayListing}>
-                <Icon type="check" size={15} /> {editingListingId ? "Aktualisieren" : "Listing speichern"}
-              </button>
-            </div>
-
-            <div style={{ marginTop: 12, padding: 10, background: theme.surface, borderRadius: 8, fontSize: 11, color: theme.textMuted, lineHeight: 1.5 }}>
-              <strong>Tipp:</strong> Klicke unten auf "Einstellungen als Standard speichern" — dann werden Format, Dauer, Versand, Rücknahme etc. beim nächsten Listing automatisch vorausgefüllt. Die CSV-Datei importierst du bei base.com unter: Produkte → Import/Export → Importieren (Trennzeichen: Semikolon, UTF-8).
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
