@@ -1071,7 +1071,7 @@ function KalkulatorTab({ products, marketplaces, shippingOptions, packagingOptio
   // base.com Export
   const exportBasecom = (marketplace, result, items) => {
     if (!result || items.length === 0) return;
-    const headers = ["name","EAN","SKU","price","quantity","category","manufacturer","tax"];
+    const headers = ["Produktname","EAN","SKU","Preis","Bestand","Kategoriename","Hersteller","Steuersatz"];
     const rows = result.items.map((ri, idx) => {
       const item = items[idx] || {};
       const suppName = item.supplierId ? (suppliers.find(s => s.id === item.supplierId)?.name || "") : "";
