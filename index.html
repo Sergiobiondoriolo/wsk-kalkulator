@@ -1071,16 +1071,17 @@ function KalkulatorTab({ products, marketplaces, shippingOptions, packagingOptio
   // base.com Export
   const exportBasecom = (marketplace, result, items) => {
     if (!result || items.length === 0) return;
-    const headers = ["Name","EAN","SKU","Preis (Brutto)","Menge","Kategorie","Marke","MwSt","EK Netto","Gewinn Netto"];
+    const headers = ["Name","EAN","SKU","Preis (Brutto)","Bestand","Kategorie","Marke","MwSt","EK Netto","Gewinn Netto"];
     const rows = result.items.map((ri, idx) => {
       const item = items[idx] || {};
       const suppName = item.supplierId ? (suppliers.find(s => s.id === item.supplierId)?.name || "") : "";
+      const prod = products.find(p => p.id === item.id);
       return [
         ri.name,
         item.ean || "",
         item.sku || "",
         String(ri.vkBrutto).replace(".", ","),
-        String(ri.qty || item.qty || 1),
+        String(prod?.bestand || 0),
         item.category || "",
         suppName,
         ri.mwstRate + "%",
@@ -1446,7 +1447,7 @@ function ProdukteTab({ products, setProducts, suppliers, setSuppliers, trash, se
   const [search, setSearch] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [editId, setEditId] = useState(null);
-  const [form, setForm] = useState({ name: "", sku: "", ean: "", pzn: "", ek: "", priceType: "netto", mwst: "19", category: "", supplierId: "" });
+  const [form, setForm] = useState({ name: "", sku: "", ean: "", pzn: "", ek: "", bestand: "", priceType: "netto", mwst: "19", category: "", supplierId: "" });
   const [importText, setImportText] = useState("");
   const [showImport, setShowImport] = useState(false);
   const [importPreview, setImportPreview] = useState([]);
@@ -1560,7 +1561,7 @@ function ProdukteTab({ products, setProducts, suppliers, setSuppliers, trash, se
   };
 
   const resetForm = () => {
-    setForm({ name: "", sku: "", ean: "", pzn: "", ek: "", priceType: "netto", mwst: "19", category: "", supplierId: "" });
+    setForm({ name: "", sku: "", ean: "", pzn: "", ek: "", bestand: "", priceType: "netto", mwst: "19", category: "", supplierId: "" });
     setEditId(null);
     setShowForm(false);
   };
@@ -1573,7 +1574,7 @@ function ProdukteTab({ products, setProducts, suppliers, setSuppliers, trash, se
       const mwstRate = MWST_RATES.find((r) => r.id === form.mwst)?.rate || 19;
       ekNetto = bruttoToNetto(ekNetto, mwstRate);
     }
-    const productData = { ...form, ek: Math.round(ekNetto * 100) / 100, ekNetto: Math.round(ekNetto * 100) / 100 };
+    const productData = { ...form, ek: Math.round(ekNetto * 100) / 100, ekNetto: Math.round(ekNetto * 100) / 100, bestand: form.bestand ? parseInt(form.bestand) : 0 };
     if (editId) {
       setProducts(products.map((p) => (p.id === editId ? { ...p, ...productData } : p)));
       addLog("Bearbeitet", `"${form.name}" aktualisiert`);
@@ -1587,7 +1588,7 @@ function ProdukteTab({ products, setProducts, suppliers, setSuppliers, trash, se
   const startEdit = (p) => {
     setForm({
       name: p.name, sku: p.sku || "", ean: p.ean || "", pzn: p.pzn || "",
-      ek: String(p.ek), priceType: "netto", mwst: p.mwst || "19",
+      ek: String(p.ek), bestand: String(p.bestand || ""), priceType: "netto", mwst: p.mwst || "19",
       category: p.category || "", supplierId: p.supplierId || "",
     });
     setEditId(p.id);
@@ -2188,12 +2189,9 @@ function ProdukteTab({ products, setProducts, suppliers, setSuppliers, trash, se
             <Field label="PZN" style={{ marginTop: 12 }}>
               <input style={css.input} value={form.pzn} onChange={(e) => setForm({ ...form, pzn: e.target.value })} placeholder="z.B. 18742239" />
             </Field>
-            <div style={{ marginTop: 12, display: "flex", alignItems: "flex-end", paddingBottom: 1 }}>
-              <div style={{ fontSize: 11, color: theme.textDim, lineHeight: 1.4 }}>
-                Gespeichert wird immer der <strong style={{ color: theme.green }}>Netto-Preis pro Stück</strong>.
-                {form.priceType === "brutto" && " Brutto wird automatisch umgerechnet."}
-              </div>
-            </div>
+            <Field label="Bestand" style={{ marginTop: 12 }}>
+              <input style={{ ...css.input, fontFamily: theme.fontMono }} type="number" min="0" value={form.bestand} onChange={(e) => setForm({ ...form, bestand: e.target.value })} placeholder="0" />
+            </Field>
           </div>
           <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
             <button style={css.btn("primary")} onClick={saveProduct}><Icon type="check" size={15} /> Speichern</button>
@@ -2233,6 +2231,7 @@ function ProdukteTab({ products, setProducts, suppliers, setSuppliers, trash, se
                 <th style={{ ...css.th, textAlign: "right", cursor: "pointer", userSelect: "none" }} onClick={() => handleSort("ek")}>
                   EK Netto <SortIcon col="ek" />
                 </th>
+                <th style={{ ...css.th, textAlign: "center" }}>Bestand</th>
                 <th style={{ ...css.th, textAlign: "right" }}>Aktionen</th>
               </tr>
             </thead>
@@ -2258,6 +2257,7 @@ function ProdukteTab({ products, setProducts, suppliers, setSuppliers, trash, se
                   <td style={{ ...css.td, fontFamily: theme.fontMono, fontSize: 12, color: theme.textMuted }}>{p.pzn || "–"}</td>
                   <td style={css.td}>{p.category ? <span style={css.badge(theme.accent)}>{p.category}</span> : "–"}</td>
                   <td style={{ ...css.td, textAlign: "right", fontFamily: theme.fontMono, fontWeight: 600 }}>{fmt(p.ek)}</td>
+                  <td style={{ ...css.td, textAlign: "center", fontFamily: theme.fontMono, fontSize: 12, color: (p.bestand || 0) > 0 ? theme.green : theme.red }}>{p.bestand || 0}</td>
                   <td style={{ ...css.td, textAlign: "right" }}>
                     <button style={{ ...css.btn("ghost"), padding: "4px 8px", marginRight: 4 }} onClick={() => startEdit(p)}>
                       <Icon type="edit" size={14} />
@@ -2299,7 +2299,7 @@ function PreislistenTab({ suppliers, setSuppliers, products, setProducts, addLog
   // Upload state
   const [uploadSupplierId, setUploadSupplierId] = useState(null);
   const [uploadData, setUploadData] = useState(null); // { headers, rows, fileName }
-  const [uploadMapping, setUploadMapping] = useState({ name: "", ek: "", sku: "", ean: "", pzn: "", category: "" });
+  const [uploadMapping, setUploadMapping] = useState({ name: "", ek: "", sku: "", ean: "", pzn: "", category: "", bestand: "" });
   const [uploadPriceType, setUploadPriceType] = useState("netto");
   const [uploadMwst, setUploadMwst] = useState("19");
   const [uploadPreview, setUploadPreview] = useState([]);
@@ -2355,7 +2355,7 @@ function PreislistenTab({ suppliers, setSuppliers, products, setProducts, addLog
   const processUpload = (headers, rows, fileName) => {
     setUploadData({ headers, rows, fileName });
     // Auto-map columns by header name
-    const mapping = { name: "", ek: "", sku: "", ean: "", pzn: "", category: "" };
+    const mapping = { name: "", ek: "", sku: "", ean: "", pzn: "", category: "", bestand: "" };
     const lowerHeaders = headers.map((h) => h.toLowerCase());
     const findCol = (keywords) => {
       for (const kw of keywords) {
@@ -2370,6 +2370,7 @@ function PreislistenTab({ suppliers, setSuppliers, products, setProducts, addLog
     mapping.ean = findCol(["ean", "gtin", "barcode"]);
     mapping.pzn = findCol(["pzn", "pharma"]);
     mapping.category = findCol(["kategorie", "category", "gruppe", "group", "warengruppe"]);
+    mapping.bestand = findCol(["bestand", "lager", "stock", "menge", "quantity", "verfügbar", "verfuegbar"]);
     setUploadMapping(mapping);
     updatePreview(mapping, rows);
   };
@@ -2390,6 +2391,7 @@ function PreislistenTab({ suppliers, setSuppliers, products, setProducts, addLog
           ean: mapping.ean !== "" ? String(row[parseInt(mapping.ean)] || "").trim() : "",
           pzn: mapping.pzn !== "" ? String(row[parseInt(mapping.pzn)] || "").trim() : "",
           category: mapping.category !== "" ? String(row[parseInt(mapping.category)] || "").trim() : "",
+          bestand: mapping.bestand !== "" ? parseInt(row[parseInt(mapping.bestand)] || 0) || 0 : 0,
         });
       }
     }
@@ -2426,7 +2428,7 @@ function PreislistenTab({ suppliers, setSuppliers, products, setProducts, addLog
   const cancelUpload = () => {
     setUploadSupplierId(null);
     setUploadData(null);
-    setUploadMapping({ name: "", ek: "", sku: "", ean: "", pzn: "", category: "" });
+    setUploadMapping({ name: "", ek: "", sku: "", ean: "", pzn: "", category: "", bestand: "" });
     setUploadPreview([]);
     setUploadError("");
   };
@@ -2935,6 +2937,7 @@ function PreislistenTab({ suppliers, setSuppliers, products, setProducts, addLog
                   { key: "ean", label: "EAN-Code" },
                   { key: "pzn", label: "PZN" },
                   { key: "category", label: "Kategorie" },
+                  { key: "bestand", label: "Bestand" },
                 ].map((f) => (
                   <Field key={f.key} label={f.label}>
                     <select
