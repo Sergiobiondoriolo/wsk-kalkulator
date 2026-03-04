@@ -1082,6 +1082,7 @@ function KalkulatorTab({ products, marketplaces, shippingOptions, packagingOptio
         ean: item.ean || "",
         sku: item.sku || "",
         price: String(Math.round(ri.vkBrutto * 100) / 100).replace(".", ","),
+        ek: String(Math.round(item.ek * 100) / 100).replace(".", ","),
         bestand: String(prod?.bestand || 0),
         category: item.category || "",
         manufacturer: suppName,
@@ -1102,12 +1103,13 @@ function KalkulatorTab({ products, marketplaces, shippingOptions, packagingOptio
 
   const downloadBasecomCSV = () => {
     if (!basecomModal) return;
-    const headers = ["EAN","Produktname (DE)","SKU","Preis (Standard (EUR))","Menge (Standard)","Kategoriename","Herstellername","Steuersatz","Beschreibung (DE)"];
+    const headers = ["EAN","Produktname (DE)","SKU","Preis (Standard (EUR))","Einkaufspreis","Menge (Standard)","Kategoriename","Herstellername","Steuersatz","Beschreibung (DE)"];
     const rows = basecomModal.items.map(item => [
       item.ean,
       item.name,
       item.sku,
       item.price,
+      item.ek,
       item.bestand,
       item.category,
       item.manufacturer,
@@ -1490,6 +1492,10 @@ function KalkulatorTab({ products, marketplaces, shippingOptions, packagingOptio
                   <div>
                     <div style={{ fontSize: 10, color: theme.textMuted, marginBottom: 3, textTransform: "uppercase" }}>Preis (Brutto)</div>
                     <input style={{ ...css.input, fontFamily: theme.fontMono }} value={item.price} onChange={e => updateBasecomItem(idx, "price", e.target.value)} />
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 10, color: theme.textMuted, marginBottom: 3, textTransform: "uppercase" }}>EK Netto</div>
+                    <input style={{ ...css.input, fontFamily: theme.fontMono }} value={item.ek} onChange={e => updateBasecomItem(idx, "ek", e.target.value)} />
                   </div>
                   <div>
                     <div style={{ fontSize: 10, color: theme.textMuted, marginBottom: 3, textTransform: "uppercase" }}>Bestand / Menge</div>
