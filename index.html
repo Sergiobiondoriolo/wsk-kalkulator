@@ -1071,14 +1071,14 @@ function KalkulatorTab({ products, marketplaces, shippingOptions, packagingOptio
   // base.com Export
   const exportBasecom = (marketplace, result, items) => {
     if (!result || items.length === 0) return;
-    const headers = ["Produktname (DE)","EAN","SKU","Preis (Standard (EUR))","Menge (Standard)","Kategoriename","Herstellername","Steuersatz"];
+    const headers = ["EAN","Produktname (DE)","SKU","Preis (Standard (EUR))","Menge (Standard)","Kategoriename","Herstellername","Steuersatz"];
     const rows = result.items.map((ri, idx) => {
       const item = items[idx] || {};
       const suppName = item.supplierId ? (suppliers.find(s => s.id === item.supplierId)?.name || "") : "";
       const prod = products.find(p => p.id === item.id);
       return [
-        ri.name,
         item.ean || "",
+        ri.name,
         item.sku || "",
         String(ri.vkBrutto).replace(".", ","),
         String(prod?.bestand || 0),
