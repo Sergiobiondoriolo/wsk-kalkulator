@@ -1058,7 +1058,7 @@ function KalkulatorTab({ products, marketplaces, shippingOptions, packagingOptio
   const [search, setSearch] = useState("");
   const [cart, setCart] = useState([]);
   const [manualItems, setManualItems] = useState([]);
-  const [selectedShipping, setSelectedShipping] = useState(shippingOptions[1]?.id || "");
+  const [selectedShipping, setSelectedShipping] = useState(shippingOptions[0]?.id || "");
   const [selectedPackaging, setSelectedPackaging] = useState([]);
   const [targetMargin, setTargetMargin] = useState("5");
   const [catOverrides, setCatOverrides] = useState({});
