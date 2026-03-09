@@ -1159,6 +1159,7 @@ function KalkulatorTab({ products, marketplaces, shippingOptions, packagingOptio
     ? setCart(cart.filter((c) => c.productId !== pid))
     : setCart(cart.map((c) => c.productId === pid ? { ...c, qty } : c));
   const updateCartMwst = (pid, mwst) => setCart(cart.map((c) => c.productId === pid ? { ...c, mwst } : c));
+  const updateCartName = (pid, name) => setCart(cart.map((c) => c.productId === pid ? { ...c, product: { ...c.product, customName: name } } : c));
   const removeFromCart = (pid) => setCart(cart.filter((c) => c.productId !== pid));
 
   const addManualItem = () => {
@@ -1178,10 +1179,12 @@ function KalkulatorTab({ products, marketplaces, shippingOptions, packagingOptio
     ? setManualItems(manualItems.filter((m) => m.id !== id))
     : setManualItems(manualItems.map((m) => m.id === id ? { ...m, qty } : m));
   const updateManualMwst = (id, mwst) => setManualItems(manualItems.map((m) => m.id === id ? { ...m, mwst } : m));
+  const updateManualName = (id, name) => setManualItems(manualItems.map((m) => m.id === id ? { ...m, name } : m));
   const removeManualItem = (id) => setManualItems(manualItems.filter((m) => m.id !== id));
+  const [editingName, setEditingName] = useState(null);
 
   const allItems = [
-    ...cart.map((c) => ({ id: c.productId, name: c.product.name, ek: c.product.ek, qty: c.qty, mwst: c.mwst, pzn: c.product.pzn, sku: c.product.sku, ean: c.product.ean || "", category: c.product.category || "", supplierId: c.product.supplierId, isManual: false })),
+    ...cart.map((c) => ({ id: c.productId, name: c.product.customName || c.product.name, ek: c.product.ek, qty: c.qty, mwst: c.mwst, pzn: c.product.pzn, sku: c.product.sku, ean: c.product.ean || "", category: c.product.category || "", supplierId: c.product.supplierId, isManual: false })),
     ...manualItems.map((m) => ({ id: m.id, name: m.name, ek: m.ek, fixedVk: m.fixedVk || null, qty: m.qty, mwst: m.mwst, pzn: "", sku: "", ean: "", category: "", supplierId: "", isManual: true })),
   ];
 
@@ -1316,7 +1319,14 @@ function KalkulatorTab({ products, marketplaces, shippingOptions, packagingOptio
                 {allItems.map((item) => (
                   <tr key={item.id}>
                     <td style={css.td}>
-                      <div style={{ fontWeight: 500, fontSize: 13, display: "flex", alignItems: "center", gap: 6 }}>{item.name}{lastAdded === item.id && <span style={{ color: theme.green, fontSize: 11, fontWeight: 700, animation: "none" }}>✓ hinzugefügt</span>}</div>
+                      <div style={{ fontWeight: 500, fontSize: 13, display: "flex", alignItems: "center", gap: 6 }}>
+                        {editingName === item.id ? (
+                          <input style={{ ...css.input, fontSize: 13, fontWeight: 500, padding: "2px 6px", width: "100%" }} autoFocus defaultValue={item.name} onBlur={(e) => { const v = e.target.value.trim(); if (v) { item.isManual ? updateManualName(item.id, v) : updateCartName(item.id, v); } setEditingName(null); }} onKeyDown={(e) => { if (e.key === "Enter") e.target.blur(); if (e.key === "Escape") setEditingName(null); }} />
+                        ) : (
+                          <span style={{ cursor: "pointer", borderBottom: "1px dashed transparent" }} onDoubleClick={() => setEditingName(item.id)} title="Doppelklick zum Umbenennen">{item.name}</span>
+                        )}
+                        {lastAdded === item.id && <span style={{ color: theme.green, fontSize: 11, fontWeight: 700, animation: "none" }}>✓ hinzugefügt</span>}
+                      </div>
                       <div style={{ fontSize: 11, color: theme.textMuted, display: "flex", gap: 6, flexWrap: "wrap" }}>
                         {item.supplierId && <span style={css.badge(getSupplierColor(item.supplierId))}>{getSupplierName(item.supplierId)}</span>}
                         {item.pzn && <span style={{ cursor: "pointer", background: theme.surface, border: "1px solid " + theme.border, borderRadius: 4, padding: "1px 6px", fontSize: 10, display: "inline-flex", alignItems: "center", gap: 3 }} onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(item.pzn); const el = e.currentTarget; el.style.borderColor = theme.green; el.style.color = theme.green; const orig = el.innerHTML; el.textContent = "✓ PZN kopiert"; setTimeout(() => { el.innerHTML = orig; el.style.borderColor = ""; el.style.color = ""; }, 1500); }} title="PZN kopieren">PZN: {item.pzn} <span style={{ opacity: 0.5 }}>⧉</span></span>}
