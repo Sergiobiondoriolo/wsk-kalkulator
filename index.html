@@ -816,7 +816,7 @@ function PreisKalkulatorApp({ appPassword, setAppPassword }) {
   };
 
   // Auto-update: when app version changes, refresh marketplace defaults (keeps custom marketplaces)
-  const APP_VERSION = "3.6";
+  const APP_VERSION = "3.7";
   useEffect(() => {
     if (!mpLoaded || !marketplaces.length) return;
     const vKey = "pk_app_version";
@@ -1066,7 +1066,7 @@ function KalkulatorTab({ products, marketplaces, shippingOptions, packagingOptio
   const [showSearch, setShowSearch] = useState(false);
   const [filterSupplier, setFilterSupplier] = useState("");
   const [showManual, setShowManual] = useState(false);
-  const [manualForm, setManualForm] = useState({ name: "", ek: "", mwst: "19" });
+  const [manualForm, setManualForm] = useState({ name: "", ek: "", mwst: "19", priceType: "ek" });
 
   // base.com Export Modal
   const [basecomModal, setBasecomModal] = useState(null);
@@ -1163,10 +1163,16 @@ function KalkulatorTab({ products, marketplaces, shippingOptions, packagingOptio
 
   const addManualItem = () => {
     if (!manualForm.name || !manualForm.ek) return;
-    const ek = parseFloat(manualForm.ek.replace(",", "."));
-    if (isNaN(ek) || ek <= 0) return;
-    setManualItems([...manualItems, { id: uid(), name: manualForm.name, ek, qty: 1, mwst: manualForm.mwst }]);
-    setManualForm({ name: "", ek: "", mwst: "19" }); setShowManual(false);
+    const val = parseFloat(manualForm.ek.replace(",", "."));
+    if (isNaN(val) || val <= 0) return;
+    if (manualForm.priceType === "vk") {
+      const mwstRate = getMwstRate(manualForm.mwst);
+      const vkNetto = val / (1 + mwstRate / 100);
+      setManualItems([...manualItems, { id: uid(), name: manualForm.name, ek: 0, fixedVk: val, vkNetto: Math.round(vkNetto * 100) / 100, qty: 1, mwst: manualForm.mwst }]);
+    } else {
+      setManualItems([...manualItems, { id: uid(), name: manualForm.name, ek: val, fixedVk: null, vkNetto: null, qty: 1, mwst: manualForm.mwst }]);
+    }
+    setManualForm({ name: "", ek: "", mwst: "19", priceType: "ek" }); setShowManual(false);
   };
   const updateManualQty = (id, qty) => qty <= 0
     ? setManualItems(manualItems.filter((m) => m.id !== id))
@@ -1176,7 +1182,7 @@ function KalkulatorTab({ products, marketplaces, shippingOptions, packagingOptio
 
   const allItems = [
     ...cart.map((c) => ({ id: c.productId, name: c.product.name, ek: c.product.ek, qty: c.qty, mwst: c.mwst, pzn: c.product.pzn, sku: c.product.sku, ean: c.product.ean || "", category: c.product.category || "", supplierId: c.product.supplierId, isManual: false })),
-    ...manualItems.map((m) => ({ id: m.id, name: m.name, ek: m.ek, qty: m.qty, mwst: m.mwst, pzn: "", sku: "", ean: "", category: "", supplierId: "", isManual: true })),
+    ...manualItems.map((m) => ({ id: m.id, name: m.name, ek: m.ek, fixedVk: m.fixedVk || null, qty: m.qty, mwst: m.mwst, pzn: "", sku: "", ean: "", category: "", supplierId: "", isManual: true })),
   ];
 
   const totalItems = allItems.reduce((s, i) => s + i.qty, 0);
@@ -1197,6 +1203,15 @@ function KalkulatorTab({ products, marketplaces, shippingOptions, packagingOptio
     const calcWithFee = (fee) => {
       const fixFeeNetto = fee / 1.19;
       const itemResults = allItems.map((item) => {
+        if (item.fixedVk) {
+          const mwstRate = getMwstRate(item.mwst);
+          const vkBrutto = item.fixedVk * item.qty;
+          const vkNetto = vkBrutto / (1 + mwstRate / 100);
+          const provNetto = vkNetto * (prov / 100);
+          const ekItem = item.ek * item.qty;
+          const gewinn = vkNetto - ekItem - provNetto;
+          return { ...item, mwstRate, vkNetto: Math.round(vkNetto*100)/100, vkBrutto: Math.round(vkBrutto*100)/100, mwstAmount: Math.round((vkBrutto-vkNetto)*100)/100, provNetto: Math.round(provNetto*100)/100, gewinn: Math.round(gewinn*100)/100, gewinnProStueck: item.qty > 0 ? Math.round((gewinn/item.qty)*100)/100 : 0 };
+        }
         const ekItem = item.ek * item.qty;
         const costShare = totalEkNetto > 0 ? (ekItem / totalEkNetto) * (sharedCosts + fixFeeNetto) : 0;
         const vkNetto = (ekItem + costShare) * (1 + margin / 100) / divisor;
@@ -1271,7 +1286,13 @@ function KalkulatorTab({ products, marketplaces, shippingOptions, packagingOptio
         {showManual && (
           <div style={{ display: "flex", gap: 10, marginBottom: 14, padding: "12px 14px", background: theme.surface, borderRadius: theme.radiusSm, border: `1px solid ${theme.border}`, alignItems: "end" }}>
             <Field label="Bezeichnung"><input style={{ ...css.input, minWidth: 180 }} value={manualForm.name} onChange={(e) => setManualForm({ ...manualForm, name: e.target.value })} placeholder="Produktname..." /></Field>
-            <Field label="EK Netto"><input style={{ ...css.input, width: 100, fontFamily: theme.fontMono }} value={manualForm.ek} onChange={(e) => setManualForm({ ...manualForm, ek: e.target.value })} placeholder="0.00" /></Field>
+            <Field label={manualForm.priceType === "vk" ? "VK Brutto" : "EK Netto"}>
+              <div style={{ display: "flex", gap: 4 }}>
+                <input style={{ ...css.input, width: 100, fontFamily: theme.fontMono }} value={manualForm.ek} onChange={(e) => setManualForm({ ...manualForm, ek: e.target.value })} placeholder="0.00" />
+                <button style={{ ...css.btn(manualForm.priceType === "ek" ? "primary" : "ghost"), padding: "4px 8px", fontSize: 10, minWidth: 32 }} onClick={() => setManualForm({ ...manualForm, priceType: "ek" })}>EK</button>
+                <button style={{ ...css.btn(manualForm.priceType === "vk" ? "primary" : "ghost"), padding: "4px 8px", fontSize: 10, minWidth: 32 }} onClick={() => setManualForm({ ...manualForm, priceType: "vk" })}>VK</button>
+              </div>
+            </Field>
             <Field label="MwSt"><select style={{ ...css.select, width: 80 }} value={manualForm.mwst} onChange={(e) => setManualForm({ ...manualForm, mwst: e.target.value })}>{MWST_RATES.map((r) => <option key={r.id} value={r.id}>{r.rate}%</option>)}</select></Field>
             <button style={css.btn("primary")} onClick={addManualItem}><Icon type="plus" size={14} /></button>
             <button style={css.btn("ghost")} onClick={() => setShowManual(false)}><Icon type="x" size={14} /></button>
@@ -1284,7 +1305,7 @@ function KalkulatorTab({ products, marketplaces, shippingOptions, packagingOptio
               <thead><tr>
                 <th style={css.th}>Produkt</th>
                 <th style={{ ...css.th, textAlign: "center", width: 80 }}>MwSt</th>
-                <th style={{ ...css.th, textAlign: "right", width: 100 }}>EK Netto</th>
+                <th style={{ ...css.th, textAlign: "right", width: 100 }}>EK/VK</th>
                 <th style={{ ...css.th, textAlign: "center", width: 120 }}>Menge</th>
                 <th style={{ ...css.th, textAlign: "right", width: 100 }}>Gesamt</th>
                 <th style={{ ...css.th, width: 36 }}></th>
@@ -1306,7 +1327,7 @@ function KalkulatorTab({ products, marketplaces, shippingOptions, packagingOptio
                         {MWST_RATES.map((r) => <option key={r.id} value={r.id}>{r.rate}%</option>)}
                       </select>
                     </td>
-                    <td style={{ ...css.td, textAlign: "right", fontFamily: theme.fontMono, fontSize: 13 }}>{fmt(item.ek)}</td>
+                    <td style={{ ...css.td, textAlign: "right", fontFamily: theme.fontMono, fontSize: 13 }}>{item.fixedVk ? <span style={{ color: theme.green }}>{fmt(item.fixedVk)} <span style={{ fontSize: 9, color: theme.textMuted }}>VK</span></span> : <span>{fmt(item.ek)} <span style={{ fontSize: 9, color: theme.textMuted }}>EK</span></span>}</td>
                     <td style={{ ...css.td, textAlign: "center" }}>
                       <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 4 }}>
                         <button style={{ ...css.btn("ghost"), padding: "2px 8px", fontSize: 14, fontWeight: 700 }} onClick={() => item.isManual ? updateManualQty(item.id, item.qty-1) : updateCartQty(item.id, item.qty-1)}>{"−"}</button>
@@ -1314,7 +1335,7 @@ function KalkulatorTab({ products, marketplaces, shippingOptions, packagingOptio
                         <button style={{ ...css.btn("ghost"), padding: "2px 8px", fontSize: 14, fontWeight: 700 }} onClick={() => item.isManual ? updateManualQty(item.id, item.qty+1) : updateCartQty(item.id, item.qty+1)}>+</button>
                       </div>
                     </td>
-                    <td style={{ ...css.td, textAlign: "right", fontFamily: theme.fontMono, fontWeight: 600, fontSize: 13 }}>{fmt(item.ek * item.qty)}</td>
+                    <td style={{ ...css.td, textAlign: "right", fontFamily: theme.fontMono, fontWeight: 600, fontSize: 13 }}>{fmt(item.fixedVk ? item.fixedVk * item.qty : item.ek * item.qty)}</td>
                     <td style={{ ...css.td, textAlign: "center" }}>
                       <button style={{ ...css.btn("ghost"), padding: "2px 6px", color: theme.red }} onClick={() => item.isManual ? removeManualItem(item.id) : removeFromCart(item.id)}><Icon type="x" size={12} /></button>
                     </td>
