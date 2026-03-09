@@ -1214,7 +1214,8 @@ function KalkulatorTab({ products, marketplaces, shippingOptions, packagingOptio
           const vkNetto = vkBrutto / (1 + mwstRate / 100);
           const provNetto = vkNetto * (prov / 100);
           const ekItem = item.ek * item.qty;
-          const gewinn = vkNetto - ekItem - provNetto;
+          const costShare = totalEkNetto > 0 ? (ekItem / totalEkNetto) * (sharedCosts + fixFeeNetto) : (sharedCosts + fixFeeNetto) / allItems.length;
+          const gewinn = vkNetto - ekItem - provNetto - costShare;
           return { ...item, mwstRate, vkNetto: Math.round(vkNetto*100)/100, vkBrutto: Math.round(vkBrutto*100)/100, mwstAmount: Math.round((vkBrutto-vkNetto)*100)/100, provNetto: Math.round(provNetto*100)/100, gewinn: Math.round(gewinn*100)/100, gewinnProStueck: item.qty > 0 ? Math.round((gewinn/item.qty)*100)/100 : 0 };
         }
         const ekItem = item.ek * item.qty;
