@@ -1187,6 +1187,8 @@ function KalkulatorTab({ products, marketplaces, shippingOptions, packagingOptio
 
   const totalItems = allItems.reduce((s, i) => s + i.qty, 0);
   const totalEkNetto = allItems.reduce((s, i) => s + i.ek * i.qty, 0);
+  const totalVkFixed = allItems.reduce((s, i) => s + (i.fixedVk ? i.fixedVk * i.qty : 0), 0);
+  const hasFixedVk = allItems.some(i => i.fixedVk);
   const shippingCost = shippingOptions.find((s) => s.id === selectedShipping)?.cost || 0;
   const packagingCost = selectedPackaging.reduce((sum, id) => {
     const p = packagingOptions.find((o) => o.id === id);
@@ -1213,7 +1215,7 @@ function KalkulatorTab({ products, marketplaces, shippingOptions, packagingOptio
           return { ...item, mwstRate, vkNetto: Math.round(vkNetto*100)/100, vkBrutto: Math.round(vkBrutto*100)/100, mwstAmount: Math.round((vkBrutto-vkNetto)*100)/100, provNetto: Math.round(provNetto*100)/100, gewinn: Math.round(gewinn*100)/100, gewinnProStueck: item.qty > 0 ? Math.round((gewinn/item.qty)*100)/100 : 0 };
         }
         const ekItem = item.ek * item.qty;
-        const costShare = totalEkNetto > 0 ? (ekItem / totalEkNetto) * (sharedCosts + fixFeeNetto) : 0;
+        const costShare = totalEkNetto > 0 ? (ekItem / totalEkNetto) * (sharedCosts + fixFeeNetto) : (sharedCosts + fixFeeNetto) / allItems.length;
         const vkNetto = (ekItem + costShare) * (1 + margin / 100) / divisor;
         const mwstRate = getMwstRate(item.mwst);
         const vkBrutto = vkNetto * (1 + mwstRate / 100);
@@ -1344,7 +1346,7 @@ function KalkulatorTab({ products, marketplaces, shippingOptions, packagingOptio
                 <tr style={{ background: theme.surface }}>
                   <td style={{ ...css.td, fontWeight: 700 }}>Paket ({totalItems} Artikel)</td>
                   <td style={css.td}></td><td style={css.td}></td><td style={css.td}></td>
-                  <td style={{ ...css.td, textAlign: "right", fontFamily: theme.fontMono, fontWeight: 700, fontSize: 15 }}>{fmt(totalEkNetto)}</td>
+                  <td style={{ ...css.td, textAlign: "right", fontFamily: theme.fontMono, fontWeight: 700, fontSize: 15 }}>{totalEkNetto > 0 && !hasFixedVk ? fmt(totalEkNetto) : hasFixedVk && totalEkNetto === 0 ? <span style={{ color: theme.green }}>{fmt(totalVkFixed)} <span style={{ fontSize: 10, color: theme.textMuted }}>VK</span></span> : <span>{fmt(totalEkNetto)} <span style={{ fontSize: 10, color: theme.textMuted }}>EK</span> + <span style={{ color: theme.green }}>{fmt(totalVkFixed)}</span> <span style={{ fontSize: 10, color: theme.textMuted }}>VK</span></span>}</td>
                   <td style={css.td}><button style={{ ...css.btn("ghost"), padding: "2px 6px", color: theme.red, fontSize: 10 }} onClick={() => { setCart([]); setManualItems([]); }}>Alle</button></td>
                 </tr>
               </tbody>
@@ -1393,11 +1395,11 @@ function KalkulatorTab({ products, marketplaces, shippingOptions, packagingOptio
         </div>
       )}
 
-      {allItems.length > 0 && totalEkNetto > 0 && (
+      {allItems.length > 0 && (totalEkNetto > 0 || allItems.some(i => i.fixedVk)) && (
         <div style={css.card}>
           <div style={css.cardTitle}><Icon type="euro" size={16} /> Kalkulierte Verkaufspreise <span style={{ fontWeight: 400, color: theme.textMuted, marginLeft: 8 }}>({totalItems} Artikel)</span></div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 10, marginBottom: 20 }}>
-            <div style={css.resultBox(theme.textMuted, theme.surface)}><div style={css.resultValue(theme.text)}>{fmt(totalEkNetto)}</div><div style={css.resultLabel}>EK Netto gesamt</div></div>
+            <div style={css.resultBox(theme.textMuted, theme.surface)}><div style={css.resultValue(theme.text)}>{hasFixedVk && totalEkNetto === 0 ? fmt(totalVkFixed) : fmt(totalEkNetto)}</div><div style={css.resultLabel}>{hasFixedVk && totalEkNetto === 0 ? "VK Brutto (fix)" : "EK Netto gesamt"}</div></div>
             <div style={css.resultBox(theme.accent, theme.accentGlow)}><div style={css.resultValue(theme.accent)}>{fmt(shippingCost)}</div><div style={css.resultLabel}>Versand (1x)</div></div>
             <div style={css.resultBox(theme.orange, theme.yellowGlow)}><div style={css.resultValue(theme.orange)}>{fmt(packagingCost)}</div><div style={css.resultLabel}>Verpackung (1x)</div></div>
             <div style={css.resultBox(theme.green, theme.greenGlow)}><div style={css.resultValue(theme.green)}>{fmtP(margin)}</div><div style={css.resultLabel}>Aufschlag</div></div>
@@ -1456,7 +1458,7 @@ function KalkulatorTab({ products, marketplaces, shippingOptions, packagingOptio
                     <div><div style={{ fontSize: 11, color: theme.textMuted, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 4 }}>VK Netto</div><div style={{ fontSize: 16, fontWeight: 700, fontFamily: theme.fontMono }}>{fmt(r.totalVkNetto)}</div></div>
                     <div><div style={{ fontSize: 11, color: theme.textMuted, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 4 }}>MwSt</div><div style={{ fontSize: 16, fontWeight: 700, fontFamily: theme.fontMono, color: theme.textMuted }}>{fmt(r.totalMwst)}</div></div>
                     <div><div style={{ fontSize: 11, color: theme.textMuted, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 4 }}>Provision Netto</div><div style={{ fontSize: 16, fontWeight: 700, fontFamily: theme.fontMono, color: theme.red }}>{"-"}{fmt(r.totalProv)}</div></div>
-                    <div><div style={{ fontSize: 11, color: theme.textMuted, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 4 }}>EK Netto</div><div style={{ fontSize: 16, fontWeight: 700, fontFamily: theme.fontMono, color: theme.red }}>{"-"}{fmt(totalEkNetto)}</div></div>
+                    <div><div style={{ fontSize: 11, color: theme.textMuted, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 4 }}>{hasFixedVk && totalEkNetto === 0 ? "VK fix (Brutto)" : "EK Netto"}</div><div style={{ fontSize: 16, fontWeight: 700, fontFamily: theme.fontMono, color: hasFixedVk && totalEkNetto === 0 ? theme.text : theme.red }}>{hasFixedVk && totalEkNetto === 0 ? fmt(totalVkFixed) : <span>{"-"}{fmt(totalEkNetto)}</span>}</div></div>
                     <div><div style={{ fontSize: 11, color: theme.textMuted, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 4 }}>Versand+Verp.</div><div style={{ fontSize: 16, fontWeight: 700, fontFamily: theme.fontMono, color: theme.red }}>{"-"}{fmt(sharedCosts)}</div></div>
                     <div style={{ padding: "8px 12px", background: r.totalGewinn >= 0 ? theme.greenGlow : theme.redGlow, borderRadius: theme.radiusSm, border: `1px solid ${r.totalGewinn >= 0 ? theme.green + "33" : theme.red + "33"}` }}>
                       <div style={{ fontSize: 11, color: r.totalGewinn >= 0 ? theme.green : theme.red, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 4, fontWeight: 600 }}>Netto-Gewinn</div>
